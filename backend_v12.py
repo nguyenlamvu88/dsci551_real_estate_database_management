@@ -1,3 +1,5 @@
+import re
+
 import bcrypt
 from pymongo import MongoClient, ASCENDING, DESCENDING
 import logging
@@ -9,6 +11,9 @@ from bson import ObjectId
 import csv
 import datetime
 import os
+from PIL import Image
+from io import BytesIO
+import base64
 
 
 """
@@ -96,6 +101,7 @@ RED = "\033[91m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
 BLUE = "\033[94m"
+PURPLE = "\033[95m"
 RESET = "\033[0m"  # Reset to default color
 
 dt_now = datetime.datetime.now()
@@ -131,7 +137,11 @@ property_schema = {
 
 def check_connection():
     """
-    Check the MongoDB connection by attempting to retrieve server information.
+    Checks the MongoDB connection by attempting to retrieve server information.
+    Logs the result and exits the application if the connection is unsuccessful.
+
+    Raises:
+        SystemExit: If the MongoDB connection cannot be established, the application will exit.
     """
     try:
         client.server_info()
@@ -143,8 +153,15 @@ def check_connection():
 
 def register_user(username, password):
     """
-    Allow new user to create username and password
-    Users can only delete and update properties that inserted by them.
+    Registers a new user with a username and password if the username does not already exist.
+    The password is hashed before storage for security.
+
+    Args:
+        username (str): The username for the new user.
+        password (str): The user's password which will be hashed before storage.
+
+    Returns:
+        bool: True if registration was successful, False if the username already exists.
     """
     user_collection = client['authentication']['login_info']
     if user_collection.find_one({"username": username}):
@@ -166,7 +183,14 @@ def register_user(username, password):
 
 def authenticate_user(username, password):
     """
-    Check for username and password before granting access.
+    Authenticates a user by checking the provided username and password against stored values.
+
+    Args:
+        username (str): The username to authenticate.
+        password (str): The password to authenticate.
+
+    Returns:
+        bool: True if authentication is successful, False otherwise.
     """
     user_collection = client['authentication']['login_info']
     user = user_collection.find_one({'username': username})
@@ -182,7 +206,8 @@ def authenticate_user(username, password):
 
 def initialize_indexes():
     """
-    Create indexes on commonly queried fields across all databases to enhance query performance.
+    Creates indexes on commonly queried fields across all configured databases to enhance query performance.
+    Indexes are created for 'city', 'state', 'type', 'address', and 'custom_id' fields.
     """
     index_fields = ['city', 'state', 'type', 'address', 'custom_id']
     for db_name in DATABASE_NAMES:
@@ -195,20 +220,44 @@ def initialize_indexes():
 
 def create_custom_id(state, city, address):
     """
-    Generate a custom ID using the state, city, and address.
-    The city name will have all whitespace removed before using in the ID.
+    Generates a custom ID using the state, city, and address information.
+    This ID is used as a unique identifier for properties within the database.
+
+    Args:
+        state (str): The state where the property is located.
+        city (str): The city where the property is located.
+        address (str): The property's address.
+
+    Returns:
+        str: A custom ID generated based on the state, city, and address.
     """
     state_abbr = state[:3].upper().strip()
-    city_abbr = ''.join(city.split())[:4].upper()  # Remove all whitespace and then take the first 4 characters
-    address_num = ''.join(filter(str.isdigit, address))
+    city_abbr = ''.join(city.split())[:4].upper()
 
-    custom_id = f"{state_abbr}-{city_abbr}-{address_num}"
+    # Use regular expression to extract the first numeric part and the first four words of the street name
+    address_parts = re.search(r'(\d+)\s+([\w]+\s+[\w]+\s+[\w]+\s+[\w]+|\w+\s+\w+\s+\w+|\w+\s+\w+|\w+)', address)
+    if address_parts:
+        address_num = address_parts.group(1)  # First group: numbers
+        street_name_part = address_parts.group(2)  # Second group: first four words of the street name
+        # Replace spaces
+        street_name_part = street_name_part.replace(" ", "")
+    else:
+        address_num = '0000'  # Default if no number is found
+        street_name_part = 'NoStreet'  # Default if no street name is found
+
+    custom_id = f"{state_abbr}-{city_abbr}-{address_num}{street_name_part}"
     return custom_id
 
 
 def get_database(custom_id):
     """
-    Select a database based on the hash of the custom_id.
+    Validates the given property data against the defined schema, ensuring all required fields are present and correctly formatted.
+
+    Args:
+        property_data (dict): The property data to validate.
+
+    Raises:
+        ValueError: If any field is missing or incorrectly formatted.
     """
     hash_obj = hashlib.sha256(custom_id.encode())
     hash_value = int(hash_obj.hexdigest(), 16)
@@ -218,7 +267,14 @@ def get_database(custom_id):
 
 def generate_hash_for_duplication(custom_id, exclude_db):
     """
-    Generate a hash to decide the target database for duplication, excluding the original database.
+    Generates a hash to decide the target database for property data duplication, excluding the specified database.
+
+    Args:
+        custom_id (str): The custom ID of the property.
+        exclude_db (str): The name of the database to exclude from selection.
+
+    Returns:
+        str: The name of the target database for duplication.
     """
     hash_obj = hashlib.sha256(custom_id.encode())
     hash_value = int(hash_obj.hexdigest(), 16)
@@ -235,8 +291,13 @@ def generate_hash_for_duplication(custom_id, exclude_db):
 
 def validate_property_data(property_data):
     """
-    Validate property data against the defined schema.
-    The 'images' field is made optional, but if present, it should be a list.
+    Validates the given property data against the defined schema, ensuring all required fields are present and correctly formatted.
+
+    Args:
+        property_data (dict): The property data to validate.
+
+    Raises:
+        ValueError: If any field is missing or incorrectly formatted.
     """
     optional_fields = ['images']  # Define which fields are optional
 
@@ -268,7 +329,13 @@ def validate_property_data(property_data):
 
 def property_already_exists(custom_id):
     """
-    Check across all databases if a property with the given custom_id already exists.
+    Checks if a property with the given custom_id already exists in any of the configured databases.
+
+    Args:
+        custom_id (str): The custom ID to check.
+
+    Returns:
+        bool: True if the property exists, False otherwise.
     """
     for db_name in DATABASE_NAMES:
         db = client[db_name]
@@ -277,9 +344,61 @@ def property_already_exists(custom_id):
     return False
 
 
+def extract_image_metadata(image_data):
+    """
+    Extracts and returns image metadata either from a base64 encoded string or a file path.
+    This function supports both data encoded in base64 format and direct filesystem paths to images.
+
+    Args:
+        image_data (str): A string containing either a base64 encoded image or a path to an image file.
+
+    Returns:
+        dict: A dictionary containing metadata about the image such as filename, format, size, and mode.
+              If an error occurs, returns a dictionary with an 'Error' key and a message.
+
+    Raises:
+        Exception: Descriptive exception if image processing fails, captured and returned in the dictionary.
+    """
+    try:
+        if image_data.startswith('data:image'):
+            # Decode the base64 image data
+            base64_data = image_data.split(",")[1]
+            img = Image.open(BytesIO(base64.b64decode(base64_data)))
+            image_info = {
+                "Filename": "Not available (Base64 data)",
+                "Format": img.format,
+                "Size (pixels)": img.size,
+                "Mode": img.mode
+            }
+        else:
+            # Open the image file from path
+            img = Image.open(image_data)
+            image_info = {
+                "Filename": os.path.basename(image_data),
+                "Format": img.format,
+                "Size (pixels)": img.size,
+                "Mode": img.mode,
+                "File Size (bytes)": os.path.getsize(image_data)
+            }
+        img.close()
+        return image_info
+    except Exception as e:
+        return {"Error": f"Failed to process image data: {e}"}
+
+
 def duplicate_property(property_data, target_db_name):
     """
-    Duplicate the property data into the target database.
+    Attempts to duplicate given property data into a specified database. Logs the result of the operation.
+
+    Args:
+        property_data (dict): A dictionary containing the data of the property to be duplicated.
+        target_db_name (str): The name of the target database where the property data will be duplicated.
+
+    Returns:
+        bool: True if the duplication was successful, False otherwise, based on the insertion result.
+
+    Raises:
+        Exception: Captures any exceptions raised during the duplication process and logs them as errors.
     """
     try:
         db = client[target_db_name]
@@ -294,14 +413,28 @@ def duplicate_property(property_data, target_db_name):
 
 def insert_property(property_data, username):
     """
-    Insert a property into the appropriate database based on custom_id hash and duplicate it into one other database.
+    Inserts a property into the database after validation. If the property does not already exist,
+    it is inserted into the appropriate database based on a hash of its custom ID and then duplicated
+    in another database.
+
+    Args:
+        property_data (dict): Dictionary containing all the necessary data for a property.
+        username (str): The username of the user creating the property. Used to associate the property with the user.
+
+    Returns:
+        bool: True if the property was successfully inserted and duplicated, False otherwise.
+
+    Raises:
+        ValueError: If the validation fails or the property already exists, indicating that
+                    insertion cannot proceed.
+        Exception: General exceptions that could occur during database operations are logged and re-raised.
     """
     try:
         validate_property_data(property_data)
 
         custom_id = create_custom_id(property_data['state'], property_data['city'], property_data['address'])
         if property_already_exists(custom_id):
-            raise ValueError(RED + f"Property with custom_id {custom_id} already exists." + RESET)
+            raise ValueError(RED + f"Property with custom_id {custom_id} already exists.\n" + RESET)
 
         property_data['custom_id'] = custom_id
 
@@ -330,18 +463,25 @@ def insert_property(property_data, username):
 
 def search_property(city=None, state=None, property_type=None, address=None, custom_id=None, sort_by_price=None):
     """
-    Enhanced search function with optional sorting by price.
+    Searches properties based on provided criteria. Supports filtering by city, state, property type, and address.
+    Properties can optionally be sorted by price in ascending or descending order.
 
-    :param city: Optional city where the property is located.
-    :param state: Optional state where the property is located.
-    :param property_type: Optional type of the property (e.g., 'sale', 'rent').
-    :param address: Optional address of the property.
-    :param custom_id: Optional custom ID of the property.
-    :param sort_by_price: Optional sort direction ('asc' for ascending, 'desc' for descending).
-    :return: A list of properties that match the search criteria, optionally sorted by price.
+    Args:
+        city (str, optional): Filter properties by city.
+        state (str, optional): Filter properties by state.
+        property_type (str, optional): Filter properties by type (e.g., 'sale', 'rent').
+        address (str, optional): Filter properties by address.
+        custom_id (str, optional): Filter properties by a specific custom ID.
+        sort_by_price (str, optional): Sort the results by price, either 'asc' for ascending or 'desc' for descending.
+
+    Returns:
+        list: A list of dictionaries, each representing a property that matches the search criteria.
+
+    Notes:
+        This function queries multiple databases and aggregates results into a single list, adjusting for unique IDs.
     """
 
-    all_properties = []
+    all_properties = {}
     query = {}
 
     # Building the query based on function parameters
@@ -357,20 +497,30 @@ def search_property(city=None, state=None, property_type=None, address=None, cus
         if address:
             query["address"] = {"$regex": address, "$options": "i"}
 
-    # No sorting applied here as global sorting will be handled later
+    # Query each database and collect results
     for db_name in DATABASE_NAMES:
         db = client[db_name]
         properties_collection = db['properties']
-        results = properties_collection.find(query)
-        all_properties.extend(list(results))  # Collecting all results into one list
+        results = list(properties_collection.find(query))
+        for property in results:
+            # Use custom_id as a unique key for each property
+            cid = property["custom_id"]
+            if cid in all_properties:
+                # If this property is already listed, append the new database name to 'source_db'
+                all_properties[cid]["source_db"].append(db_name)
+            else:
+                # Otherwise, add the property to the dictionary
+                property["source_db"] = [db_name]
+                all_properties[cid] = property
+
+    # Convert the dictionary back to a list for sorting and further processing
+    properties_list = list(all_properties.values())
 
     # Applying global sorting based on the 'sort_by_price' parameter
-    if sort_by_price == 'asc':
-        all_properties.sort(key=lambda x: x['price'])
-    elif sort_by_price == 'desc':
-        all_properties.sort(key=lambda x: x['price'], reverse=True)
+    if sort_by_price:
+        properties_list.sort(key=lambda x: x['price'], reverse=(sort_by_price == 'desc'))
 
-    return all_properties
+    return properties_list
 
 
 def export_to_csv(properties, filename=None):
@@ -413,13 +563,28 @@ def export_to_json(properties, filename=None):
 
 def update_property(custom_id, updates, username):
     """
-    Update a property identified by custom_id with the provided updates in all replicated databases.
+    Updates a property specified by its custom ID with the given updates. This operation is attempted
+    across all databases where the property might be replicated.
 
-    :param custom_id: The unique identifier for the property.
-    :param updates: A dictionary containing the fields to update and their new values.
-    :return: A boolean indicating overall success or failure of the update operation.
+    Args:
+        custom_id (str): The unique identifier for the property, used to locate it in the database.
+        updates (dict): A dictionary containing the fields to be updated and their new values.
+                        Fields expected to be type-converted are explicitly handled.
+        username (str): Username of the user requesting the update. This is used to verify permissions.
+
+    Returns:
+        bool: True if the update operation was successful in at least one database, False otherwise.
+
+    Raises:
+        ValueError: If the type conversion for any of the update fields fails.
+        Exception: Logs any exceptions raised during the database operations, including permission issues
+                   and non-existence of the property under the specified ID.
+
+    Notes:
+        The function checks whether the logged-in user has the right to modify the property and updates the property
+        if they are the creator. It logs detailed information about the outcome of each update attempt across
+        multiple databases.
     """
-
     # Specify the expected type for each field that needs type conversion
     field_types = {
         'price': int,
@@ -467,12 +632,20 @@ def update_property(custom_id, updates, username):
 
 def delete_property(custom_id, username):
     """
-    Delete a property identified by custom_id from all replicated databases.
+    Deletes a property from all databases based on its custom ID, if the user has the necessary permissions.
 
-    :param custom_id: The unique identifier for the property to be deleted.
-    :return: A boolean indicating overall success or failure of the delete operation.
+    Args:
+        custom_id (str): The unique identifier for the property to be deleted.
+        username (str): The username of the user requesting the deletion.
+
+    Returns:
+        bool: True if the property was successfully deleted from all databases, False if the deletion was
+              unsuccessful or the user did not have permission to delete the property.
+
+    Notes:
+        The operation checks whether the user is the creator of the property. If not, the deletion is not allowed.
+        The function logs each attempt to delete the property across databases and confirms the deletion success.
     """
-
     original_db = get_database(custom_id)
     property_data = original_db['properties'].find_one({"custom_id": custom_id})
 
@@ -597,31 +770,46 @@ def search_property_interactive(username=None):
 
 def print_property(property_info):
     print(BLUE + "------" + RESET)
-    print(f"Custom ID: {property_info.get('custom_id', 'N/A')}")
-    print(f"Address: {property_info.get('address', 'N/A')}")
-    print(f"City: {property_info.get('city', 'N/A')}")
-    print(f"State: {property_info.get('state', 'N/A')}")
-    print(f"Zip Code: {property_info.get('zip_code', 'N/A')}")
-    print(f"Price: ${property_info.get('price', 'N/A')}")
-    print(f"Bedrooms: {property_info.get('bedrooms', 'N/A')}")
-    print(f"Bathrooms: {property_info.get('bathrooms', 'N/A')}")
-    print(f"Square Footage: {property_info.get('square_footage', 'N/A')}")
-    print(f"Type: {property_info.get('type', 'N/A')}")
-    print(f"Date Listed: {property_info.get('date_listed', 'N/A')}")
-    print(f"Description: {property_info.get('description', 'N/A')}")
+    print(PURPLE + "Custom ID: " + RESET + f"{property_info.get('custom_id', 'N/A')}")
+    print(PURPLE + "Address: " + RESET + f"{property_info.get('address', 'N/A')}")
+    print(PURPLE + "City: " + RESET + f"{property_info.get('city', 'N/A')}")
+    print(PURPLE + "State: " + RESET + f"{property_info.get('state', 'N/A')}")
+    print(PURPLE + "Zip Code: " + RESET + f"{property_info.get('zip_code', 'N/A')}")
+    print(PURPLE + "Price: " + RESET + f"${property_info.get('price', 'N/A')}")
+    print(PURPLE + "Bedrooms: " + RESET + f"{property_info.get('bedrooms', 'N/A')}")
+    print(PURPLE + "Bathrooms: " + RESET + f"{property_info.get('bathrooms', 'N/A')}")
+    print(PURPLE + "Square Footage: " + RESET + f"{property_info.get('square_footage', 'N/A')}")
+    print(PURPLE + "Type: " + RESET + f"{property_info.get('type', 'N/A')}")
+    print(PURPLE + "Date Listed: " + RESET + f"{property_info.get('date_listed', 'N/A')}")
+    print(PURPLE + "Description: " + RESET + f"{property_info.get('description', 'N/A')}")
+
     if 'images' in property_info and property_info['images']:
-        print("Images:")
-        for image in property_info['images']:
-            print(f"  - {image}")
+        print(PURPLE + "Images:" + RESET)
+        for index, image_data in enumerate(property_info['images']):
+            metadata = extract_image_metadata(image_data)
+            print(f"  Image {index + 1}:")
+            for key, value in metadata.items():
+                print(f"    - {key}: "f"{value}")
     else:
-        print("Images: N/A")
+        print("No images available")
+
     dbs = property_info.get('source_db', [])
-    print(YELLOW + f"Created By: {property_info.get('created_by', 'N/A')}" + RESET)
-    print(YELLOW + f"Found in database: {', '.join(dbs)}" + RESET)
+    if isinstance(dbs, list) and dbs:
+        dbs_display = ', '.join(dbs)
+    elif isinstance(dbs, str):
+        dbs_display = dbs  # If 'source_db' is a single string, handle it gracefully
+    else:
+        dbs_display = "No specific database information available"
+
+    print(PURPLE + "Found in database(s): " + RESET + f"{dbs_display}")
+    print(PURPLE + "Created By: " + RESET + f"{property_info.get('created_by', 'N/A')}")
     print(BLUE + "------\n" + RESET)
 
 
 def update_property_interactive(username):
+    """
+    Handles the 'update' operation in an interactive manner.
+    """
     def find_property_by_custom_id(custom_id):
         # Assuming all databases have the same structure and property is duplicated across them
         for db_name in DATABASE_NAMES:
@@ -686,6 +874,9 @@ def update_property_interactive(username):
 
 
 def delete_property_interactive(username):
+    """
+    Handles the 'delete' operation in an interactive manner.
+    """
     def find_property_by_custom_id(custom_id):
         # Assuming all databases have the same structure and property is duplicated across them
         for db_name in DATABASE_NAMES:
