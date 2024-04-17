@@ -341,9 +341,10 @@ def search_property(city=None, state=None, property_type=None, address=None, cus
     :return: A list of properties that match the search criteria, optionally sorted by price.
     """
 
-    all_properties = {}
+    all_properties = []
     query = {}
 
+    # Building the query based on function parameters
     if custom_id:
         query["custom_id"] = custom_id
     else:
@@ -356,24 +357,20 @@ def search_property(city=None, state=None, property_type=None, address=None, cus
         if address:
             query["address"] = {"$regex": address, "$options": "i"}
 
-    sort_order = [('price', ASCENDING)] if sort_by_price == 'asc' else [
-        ('price', DESCENDING)] if sort_by_price == 'desc' else None
-
+    # No sorting applied here as global sorting will be handled later
     for db_name in DATABASE_NAMES:
         db = client[db_name]
         properties_collection = db['properties']
-        results = properties_collection.find(query, sort=sort_order) if sort_order else properties_collection.find(
-            query)
+        results = properties_collection.find(query)
+        all_properties.extend(list(results))  # Collecting all results into one list
 
-        for property in results:
-            cid = property["custom_id"]
-            if cid in all_properties:
-                all_properties[cid]["source_db"].append(db_name)
-            else:
-                property["source_db"] = [db_name]
-                all_properties[cid] = property
+    # Applying global sorting based on the 'sort_by_price' parameter
+    if sort_by_price == 'asc':
+        all_properties.sort(key=lambda x: x['price'])
+    elif sort_by_price == 'desc':
+        all_properties.sort(key=lambda x: x['price'], reverse=True)
 
-    return list(all_properties.values())
+    return all_properties
 
 
 def export_to_csv(properties, filename=None):
@@ -562,8 +559,12 @@ def insert_property_interactive(username):
 
 
 def search_property_interactive(username=None):
+    """
+    Handles the 'search' operation in an interactive manner.
+    """
     print(f"Logged in as: {username}")
-    print(BLUE + "Please enter search criteria (you can search by one or multiple criteria such as city, state, or address; hit enter to skip):" + RESET)
+    print(
+        BLUE + "Please enter search criteria (you can search by one or multiple criteria such as city, state, or address; hit enter to skip):" + RESET)
     city = input("City: ").strip()
     state = input("State: ").strip()
     property_type = input("Property Type (e.g., sale, rent): ").strip()
@@ -571,7 +572,8 @@ def search_property_interactive(username=None):
     custom_id = input("Custom ID: ").strip()
     sort_by_price = input("Sort by price (asc/desc, leave blank for no sorting): ").strip().lower()
 
-    search_results = search_property(city=city, state=state, property_type=property_type, address=address, custom_id=custom_id, sort_by_price=sort_by_price)
+    search_results = search_property(city=city, state=state, property_type=property_type, address=address,
+                                     custom_id=custom_id, sort_by_price=sort_by_price)
 
     if search_results:
         print(GREEN + f"\nFound {len(search_results)} properties:\n" + RESET)
