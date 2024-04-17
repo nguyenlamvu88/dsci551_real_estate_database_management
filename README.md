@@ -2,7 +2,7 @@
 
 ## Overview
 
-This comprehensive Property Management System is designed for efficient handling of property listings through a robust backend and an intuitive frontend. The backend, developed in Python, interacts with MongoDB to manage property data. The frontend, powered by Streamlit, offers a user-friendly web interface for streamlined property management tasks.
+This comprehensive Property Management System is designed for efficient handling of property listings through a robust backend and an intuitive frontend. The backend, developed in Python, interacts with MongoDB to manage property data, ensuring that users can only update or delete properties they have added, enhancing security and data integrity. The frontend, powered by Streamlit, offers a user-friendly web interface for streamlined property management tasks, enabling users to securely interact with the system while enforcing access restrictions based on user authentication.
 
 ## Accessing the Web Application
 
@@ -25,9 +25,9 @@ The Property Management System web application can be accessed through the link:
 #### Change to the directory where `backend_v12.py` is saved and run the following commands:
 
 ##### Authentication Example:
-The username and password are set as environment variables (MYAPP_USERNAME and MYAPP_PASSWORD), users only need to log in once per session, simplifying subsequent command executions.
 - **Registering a new user**: `python backend_v12.py --register --username "newuser" --password "userpassword"`
 - **Logging in**: `python backend_v12.py --username "user" --password "userpassword"`
+Once logged in, the user can search for all properties. However, for updating and deletion, users can only update or delete properties they have added.
 
 ##### Command-Line Interface Example
 - **Initialize Database**: `python backend_v12.py --username "user" --password "userpassword" --init`
