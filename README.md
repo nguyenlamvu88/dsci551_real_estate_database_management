@@ -27,6 +27,7 @@ The Property Management System web application can be accessed through the link:
 ##### Authentication Example:
 - **Registering a new user**: `python backend_v12.py --register --username "newuser" --password "userpassword"`
 - **Logging in**: `python backend_v12.py --username "user" --password "userpassword"`
+
 Once logged in, the user can search for all properties. However, for updating and deletion, users can only update or delete properties they have added.
 
 ##### Command-Line Interface Example
