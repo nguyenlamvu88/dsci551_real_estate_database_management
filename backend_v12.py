@@ -238,7 +238,7 @@ def create_custom_id(state, city, address):
     state_abbr = state[:3].upper().strip()
     city_abbr = ''.join(city.split())[:4].upper()
 
-    # Use regular expression to extract the first numeric part and the first four words of the street name
+    # Use regular expression to extract the first numeric part and the street name
     address_parts = re.search(r'(\d+)\s+([\w]+\s+[\w]+\s+[\w]+\s+[\w]+|\w+\s+\w+\s+\w+|\w+\s+\w+|\w+)', address)
     if address_parts:
         address_num = address_parts.group(1)  # First group: numbers
