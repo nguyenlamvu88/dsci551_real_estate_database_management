@@ -102,7 +102,11 @@ GREEN = "\033[92m"
 YELLOW = "\033[93m"
 BLUE = "\033[94m"
 PURPLE = "\033[95m"
-RESET = "\033[0m"  # Reset to default color
+CYAN = "\033[96m"
+WHITE = "\033[97m"
+ORANGE = "\033[38;5;208m"
+MAGENTA = "\033[95m"
+RESET = "\033[0m"
 
 dt_now = datetime.datetime.now()
 # The format to include time (e.g., "15-Mar-24 14:30") for exporting search results to json and csv files
@@ -768,21 +772,21 @@ def search_property_interactive(username=None):
 
 def print_property(property_info):
     print(BLUE + "------" + RESET)
-    print(PURPLE + "Custom ID: " + RESET + f"{property_info.get('custom_id', 'N/A')}")
-    print(PURPLE + "Address: " + RESET + f"{property_info.get('address', 'N/A')}")
-    print(PURPLE + "City: " + RESET + f"{property_info.get('city', 'N/A')}")
-    print(PURPLE + "State: " + RESET + f"{property_info.get('state', 'N/A')}")
-    print(PURPLE + "Zip Code: " + RESET + f"{property_info.get('zip_code', 'N/A')}")
-    print(PURPLE + "Price: " + RESET + f"${property_info.get('price', 'N/A')}")
-    print(PURPLE + "Bedrooms: " + RESET + f"{property_info.get('bedrooms', 'N/A')}")
-    print(PURPLE + "Bathrooms: " + RESET + f"{property_info.get('bathrooms', 'N/A')}")
-    print(PURPLE + "Square Footage: " + RESET + f"{property_info.get('square_footage', 'N/A')}")
-    print(PURPLE + "Type: " + RESET + f"{property_info.get('type', 'N/A')}")
-    print(PURPLE + "Date Listed: " + RESET + f"{property_info.get('date_listed', 'N/A')}")
-    print(PURPLE + "Description: " + RESET + f"{property_info.get('description', 'N/A')}")
+    print(ORANGE + "Custom ID: " + RESET + f"{property_info.get('custom_id', 'N/A')}")
+    print(ORANGE + "Address: " + RESET + f"{property_info.get('address', 'N/A')}")
+    print(ORANGE + "City: " + RESET + f"{property_info.get('city', 'N/A')}")
+    print(ORANGE + "State: " + RESET + f"{property_info.get('state', 'N/A')}")
+    print(ORANGE + "Zip Code: " + RESET + f"{property_info.get('zip_code', 'N/A')}")
+    print(ORANGE + "Price: " + RESET + f"${property_info.get('price', 'N/A')}")
+    print(ORANGE + "Bedrooms: " + RESET + f"{property_info.get('bedrooms', 'N/A')}")
+    print(ORANGE + "Bathrooms: " + RESET + f"{property_info.get('bathrooms', 'N/A')}")
+    print(ORANGE + "Square Footage: " + RESET + f"{property_info.get('square_footage', 'N/A')}")
+    print(ORANGE + "Type: " + RESET + f"{property_info.get('type', 'N/A')}")
+    print(ORANGE + "Date Listed: " + RESET + f"{property_info.get('date_listed', 'N/A')}")
+    print(ORANGE + "Description: " + RESET + f"{property_info.get('description', 'N/A')}")
 
     if 'images' in property_info and property_info['images']:
-        print(PURPLE + "Images:" + RESET)
+        print(ORANGE + "Images:" + RESET)
         for index, image_data in enumerate(property_info['images']):
             metadata = extract_image_metadata(image_data)
             print(f"  Image {index + 1}:")
@@ -799,8 +803,8 @@ def print_property(property_info):
     else:
         dbs_display = "No specific database information available"
 
-    print(PURPLE + "Found in database(s): " + RESET + f"{dbs_display}")
-    print(PURPLE + "Created By: " + RESET + f"{property_info.get('created_by', 'N/A')}")
+    print(ORANGE + "Found in database(s): " + RESET + f"{dbs_display}")
+    print(ORANGE + "Created By: " + RESET + f"{property_info.get('created_by', 'N/A')}")
     print(BLUE + "------\n" + RESET)
 
 
