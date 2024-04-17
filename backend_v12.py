@@ -771,22 +771,22 @@ def search_property_interactive(username=None):
 
 
 def print_property(property_info):
-    print(BLUE + "------" + RESET)
-    print(ORANGE + "Custom ID: " + RESET + f"{property_info.get('custom_id', 'N/A')}")
-    print(ORANGE + "Address: " + RESET + f"{property_info.get('address', 'N/A')}")
-    print(ORANGE + "City: " + RESET + f"{property_info.get('city', 'N/A')}")
-    print(ORANGE + "State: " + RESET + f"{property_info.get('state', 'N/A')}")
-    print(ORANGE + "Zip Code: " + RESET + f"{property_info.get('zip_code', 'N/A')}")
-    print(ORANGE + "Price: " + RESET + f"${property_info.get('price', 'N/A')}")
-    print(ORANGE + "Bedrooms: " + RESET + f"{property_info.get('bedrooms', 'N/A')}")
-    print(ORANGE + "Bathrooms: " + RESET + f"{property_info.get('bathrooms', 'N/A')}")
-    print(ORANGE + "Square Footage: " + RESET + f"{property_info.get('square_footage', 'N/A')}")
-    print(ORANGE + "Type: " + RESET + f"{property_info.get('type', 'N/A')}")
-    print(ORANGE + "Date Listed: " + RESET + f"{property_info.get('date_listed', 'N/A')}")
-    print(ORANGE + "Description: " + RESET + f"{property_info.get('description', 'N/A')}")
+    print(ORANGE + "------" + RESET)
+    print(BLUE + "Custom ID: " + RESET + f"{property_info.get('custom_id', 'N/A')}")
+    print(BLUE + "Address: " + RESET + f"{property_info.get('address', 'N/A')}")
+    print(BLUE + "City: " + RESET + f"{property_info.get('city', 'N/A')}")
+    print(BLUE + "State: " + RESET + f"{property_info.get('state', 'N/A')}")
+    print(BLUE + "Zip Code: " + RESET + f"{property_info.get('zip_code', 'N/A')}")
+    print(BLUE + "Price: " + RESET + f"${property_info.get('price', 'N/A')}")
+    print(BLUE + "Bedrooms: " + RESET + f"{property_info.get('bedrooms', 'N/A')}")
+    print(BLUE + "Bathrooms: " + RESET + f"{property_info.get('bathrooms', 'N/A')}")
+    print(BLUE + "Square Footage: " + RESET + f"{property_info.get('square_footage', 'N/A')}")
+    print(BLUE + "Type: " + RESET + f"{property_info.get('type', 'N/A')}")
+    print(BLUE + "Date Listed: " + RESET + f"{property_info.get('date_listed', 'N/A')}")
+    print(BLUE + "Description: " + RESET + f"{property_info.get('description', 'N/A')}")
 
     if 'images' in property_info and property_info['images']:
-        print(ORANGE + "Images:" + RESET)
+        print(BLUE + "Images:" + RESET)
         for index, image_data in enumerate(property_info['images']):
             metadata = extract_image_metadata(image_data)
             print(f"  Image {index + 1}:")
@@ -803,9 +803,9 @@ def print_property(property_info):
     else:
         dbs_display = "No specific database information available"
 
-    print(ORANGE + "Found in database(s): " + RESET + f"{dbs_display}")
-    print(ORANGE + "Created By: " + RESET + f"{property_info.get('created_by', 'N/A')}")
-    print(BLUE + "------\n" + RESET)
+    print(BLUE + "Found in database(s): " + RESET + f"{dbs_display}")
+    print(BLUE + "Created By: " + RESET + f"{property_info.get('created_by', 'N/A')}")
+    print(ORANGE + "------\n" + RESET)
 
 
 def update_property_interactive(username):
